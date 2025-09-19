@@ -1,12 +1,15 @@
 mod cache;
 mod config;
+mod crates_api;
 mod curl_client;
 mod proxy;
 
 use clap::Parser;
 use config::{Config, ConfigError};
 use proxy::run_server;
+use rat_logger::{self, LevelFilter, FileConfig};
 use std::process;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "crates-proxy")]
@@ -24,7 +27,37 @@ struct Args {
 }
 
 fn setup_logging(level: &str) {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(level)).init();
+    // 转换日志级别
+    let log_level = match level {
+        "error" => LevelFilter::Error,
+        "warn" => LevelFilter::Warn,
+        "info" => LevelFilter::Info,
+        "debug" => LevelFilter::Debug,
+        "trace" => LevelFilter::Trace,
+        _ => LevelFilter::Info,
+    };
+
+    // 初始化rat_logger，添加终端和文件输出
+    let file_config = FileConfig {
+        log_dir: PathBuf::from("./logs"),
+        max_file_size: 10 * 1024 * 1024, // 10MB
+        max_compressed_files: 5,
+        compression_level: 6,
+        min_compress_threads: 1,
+        skip_server_logs: false,
+        is_raw: false,
+        compress_on_drop: true,
+    };
+
+    if let Err(e) = rat_logger::LoggerBuilder::new()
+        .add_terminal()
+        .add_file(file_config)
+        .with_level(log_level)
+        .init()
+    {
+        eprintln!("日志初始化失败: {}", e);
+        process::exit(1);
+    }
 }
 
 fn load_config(config_path: Option<String>) -> Result<Config, ConfigError> {

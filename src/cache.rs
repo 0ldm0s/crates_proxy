@@ -36,15 +36,24 @@ impl CacheManager {
     }
 
     pub fn get_cache_path(&self, crate_name: &str, version: &str, filename: &str) -> PathBuf {
-        self.storage_path
+        let path = self.storage_path
             .join(crate_name)
             .join(version)
-            .join(filename)
+            .join(filename);
+
+        // 确保目录存在
+        if let Some(parent) = path.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                rat_logger::error!("创建缓存目录失败: {:?}, 错误: {}", parent, e);
+            }
+        }
+
+        path
     }
 
     pub fn is_cached(&self, crate_name: &str, version: &str, filename: &str) -> bool {
         let path = self.get_cache_path(crate_name, version, filename);
-        path.exists() && !self.is_expired(&path)
+        path.exists() // 临时禁用TTL检查
     }
 
     pub fn is_expired(&self, path: &Path) -> bool {

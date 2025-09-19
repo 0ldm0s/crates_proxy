@@ -3,6 +3,9 @@ use std::io::{self, Read};
 use std::time::Duration;
 use thiserror::Error;
 
+// 添加调试日志
+use rat_logger;
+
 #[derive(Debug, Error)]
 pub enum CurlError {
     #[error("curl错误: {0}")]
@@ -36,22 +39,38 @@ impl CurlClient {
     }
 
     pub fn get(&self, url: &str) -> Result<Vec<u8>, CurlError> {
+        rat_logger::info!("开始下载: {}", url);
+        if let Some(ref proxy) = self.proxy_url {
+            rat_logger::info!("使用代理: {}", proxy);
+        }
+
         let mut handle = Easy::new();
+        rat_logger::info!("创建curl handle");
+
         handle.url(url)?;
+        rat_logger::info!("设置URL: {}", url);
+
         handle.useragent(&self.user_agent)?;
+        rat_logger::info!("设置User-Agent: {}", self.user_agent);
+
         handle.timeout(self.timeout)?;
+        rat_logger::info!("设置超时: {:?}", self.timeout);
 
         // 设置代理
         if let Some(ref proxy) = self.proxy_url {
+            rat_logger::info!("设置curl代理: {}", proxy);
             handle.proxy(proxy)?;
         }
 
         // 设置重定向跟随
         handle.follow_location(true)?;
         handle.max_redirections(5)?;
+        rat_logger::info!("设置重定向跟随");
 
         // 创建缓冲区来存储响应
         let mut buf = Vec::new();
+        rat_logger::info!("开始传输...");
+
         {
             let mut transfer = handle.transfer();
             transfer.write_function(|data| {
@@ -59,7 +78,14 @@ impl CurlClient {
                 Ok(data.len())
             })?;
 
-            transfer.perform()?;
+            rat_logger::info!("执行transfer...");
+            match transfer.perform() {
+                Ok(_) => rat_logger::info!("transfer执行成功"),
+                Err(e) => {
+                    rat_logger::error!("transfer执行失败: {}", e);
+                    return Err(CurlError::CurlError(e));
+                }
+            }
         }
 
         // 检查HTTP状态码

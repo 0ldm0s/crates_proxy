@@ -7,9 +7,7 @@ default_ttl = 3600  # 秒
 
 [upstream]
 # 可选：上游代理配置
-# proxy_url = "http://proxy.example.com:8080"
-# 或
-# proxy_url = "socks5://proxy.example.com:1080"
+proxy_url = "http://172.16.0.80:9051"
 
 [user_agent]
 # 模拟User-Agent

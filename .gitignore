@@ -1,1 +1,22 @@
 /target
+/.claude
+/logs
+/server.log
+/cache
+
+# 测试过程中下载的文件
+*.crate
+
+# 临时文件
+*.tmp
+*.temp
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db

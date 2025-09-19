@@ -206,20 +206,39 @@ impl CratesApiClient {
         let json: Value = serde_json::from_str(&response_text)?;
 
         let mut versions = Vec::new();
-        if let Some(version_ids) = json.get("versions").and_then(|v| v.as_array()) {
-            for version_id in version_ids {
-                if let Some(id_num) = version_id.as_u64() {
-                    // 构造版本详情API的URL
-                    let version_url = format!("https://crates.io/api/v1/crates/{}/versions/{}", crate_name, id_num);
 
-                    // 获取版本详情
-                    if let Ok(version_info) = self.get_version_details(&version_url) {
-                        versions.push(version_info);
-                    }
-                }
+        // 直接从响应中的versions数组获取版本信息
+        if let Some(version_array) = json.get("versions").and_then(|v| v.as_array()) {
+            for version_obj in version_array {
+                let num = version_obj.get("num")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                let dl_path = version_obj.get("dl_path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let checksum = version_obj.get("checksum")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let yanked = version_obj.get("yanked")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                versions.push(CrateVersion {
+                    num,
+                    dl_path,
+                    checksum,
+                    yanked,
+                });
             }
         }
 
+        rat_logger::info!("从API获取到 {} 个版本: {}", versions.len(), crate_name);
         Ok(versions)
     }
 

@@ -2,16 +2,16 @@ use crate::cache::CacheManager;
 use crate::config::Config;
 use crate::crates_api::{CratesApiClient, CrateVersion};
 use crate::curl_client::{CurlClient, CurlError};
+use crate::version_manager::{VersionManager, VersionManagerError};
 use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::header::{CONTENT_TYPE, CONTENT_LENGTH};
 use hyper::service::Service;
 use hyper::{Method, Request, Response, StatusCode, Uri};
 use hyper_util::rt::TokioIo;
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use thiserror::Error;
 use url::Url;
 
@@ -23,6 +23,8 @@ pub enum ProxyError {
     CurlError(#[from] CurlError),
     #[error("API错误: {0}")]
     ApiError(#[from] crate::crates_api::ApiError),
+    #[error("版本管理错误: {0}")]
+    VersionManagerError(#[from] VersionManagerError),
     #[error("URL解析错误: {0}")]
     UrlError(#[from] url::ParseError),
     #[error("超文本传输协议错误: {0}")]
@@ -41,7 +43,7 @@ pub struct ProxyService {
     api_client: Arc<CratesApiClient>,
     curl_client: Arc<CurlClient>,
     upstream_url: Url,
-    latest_versions: Arc<RwLock<HashMap<String, String>>>, // 包名 -> 最新版本号的映射
+    version_manager: Arc<VersionManager>,
 }
 
 impl ProxyService {
@@ -72,6 +74,12 @@ impl ProxyService {
 
         let upstream_url = Url::parse("https://crates.io/")?;
 
+        // 创建版本管理器
+        let version_manager = Arc::new(VersionManager::new(config)?);
+
+        // 启动定期清理任务
+        Self::start_cleanup_task(version_manager.clone());
+
         rat_logger::info!("ProxyService创建成功");
 
         Ok(Self {
@@ -79,36 +87,100 @@ impl ProxyService {
             api_client,
             curl_client,
             upstream_url,
-            latest_versions: Arc::new(RwLock::new(HashMap::new())),
+            version_manager,
         })
     }
 
-    /// 获取并缓存最新版本号
-    fn get_latest_version(&self, crate_name: &str) -> Result<String, ProxyError> {
-        // 首先检查内存缓存
-        {
-            let versions = self.latest_versions.read().unwrap();
-            if let Some(version) = versions.get(crate_name) {
-                rat_logger::info!("从缓存获取最新版本: {} -> {}", crate_name, version);
-                return Ok(version.clone());
+    /// 启动后台清理任务
+    fn start_cleanup_task(version_manager: Arc<VersionManager>) {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // 每小时清理一次
+
+            loop {
+                interval.tick().await;
+                rat_logger::info!("开始定期清理过期数据...");
+
+                match version_manager.cleanup_expired_data() {
+                    Ok(count) => {
+                        if count > 0 {
+                            rat_logger::info!("定期清理完成，清理了 {} 个过期数据", count);
+                        } else {
+                            rat_logger::debug!("定期清理完成，没有过期数据");
+                        }
+                    }
+                    Err(e) => {
+                        rat_logger::error!("定期清理失败: {}", e);
+                    }
+                }
+            }
+        });
+    }
+
+    /// 获取并缓存所有版本信息
+    fn get_and_cache_all_versions(&self, crate_name: &str) -> Result<(), ProxyError> {
+        rat_logger::info!("获取包 {} 的所有版本信息", crate_name);
+
+        // 从API获取所有可用版本
+        let versions = self.api_client.get_available_versions(crate_name)
+            .map_err(|e| ProxyError::ApiError(e))?;
+
+        if versions.is_empty() {
+            rat_logger::warn!("包 {} 没有找到任何版本", crate_name);
+            return Ok(());
+        }
+
+        // 找到最新版本
+        let latest_version = versions.iter()
+            .filter(|v| !v.yanked)
+            .max_by(|a, b| a.num.cmp(&b.num))
+            .map(|v| v.num.clone());
+
+        if let Some(ref latest) = latest_version {
+            // 保存最新版本映射
+            self.version_manager.set_latest_version(crate_name, latest)?;
+            rat_logger::info!("设置最新版本: {} -> {}", crate_name, latest);
+        }
+
+        let version_count = versions.len();
+
+        // 保存所有版本信息到数据库
+        for version in versions {
+            if let Err(e) = self.version_manager.create_version_info(
+                crate_name,
+                &version.num,
+                &version.dl_path,
+                &version.checksum,
+                version.yanked
+            ) {
+                rat_logger::warn!("保存版本信息失败 {}:{}: {}", crate_name, version.num, e);
             }
         }
 
-        // 缓存未命中，从API获取
-        rat_logger::info!("从API获取最新版本: {}", crate_name);
-        let info = self.api_client.get_crate_info(crate_name)
-            .map_err(|e| ProxyError::ApiError(e))?;
+        rat_logger::info!("成功缓存包 {} 的 {} 个版本", crate_name, version_count);
+        Ok(())
+    }
 
-        let latest_version = info.max_version.clone();
-
-        // 更新缓存
-        {
-            let mut versions = self.latest_versions.write().unwrap();
-            versions.insert(crate_name.to_string(), latest_version.clone());
-            rat_logger::info!("更新最新版本缓存: {} -> {}", crate_name, latest_version);
+    /// 获取最新版本号
+    fn get_latest_version(&self, crate_name: &str) -> Result<String, ProxyError> {
+        // 首先检查版本管理器
+        match self.version_manager.get_latest_version(crate_name)? {
+            Some(version) => {
+                rat_logger::info!("从版本管理器获取最新版本: {} -> {}", crate_name, version);
+                return Ok(version);
+            }
+            None => {
+                rat_logger::info!("版本管理器中未找到版本，从API获取: {}", crate_name);
+            }
         }
 
-        Ok(latest_version)
+        // 获取并缓存所有版本
+        self.get_and_cache_all_versions(crate_name)?;
+
+        // 再次尝试从版本管理器获取
+        match self.version_manager.get_latest_version(crate_name)? {
+            Some(version) => Ok(version),
+            None => Err(ProxyError::InvalidRequest(format!("无法获取包 {} 的版本信息", crate_name))),
+        }
     }
 
     fn parse_crates_request(&self, uri: &Uri) -> Result<(String, String, String), ProxyError> {

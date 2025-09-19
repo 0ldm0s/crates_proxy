@@ -3,6 +3,7 @@ mod config;
 mod crates_api;
 mod curl_client;
 mod proxy;
+mod version_manager;
 
 use clap::Parser;
 use config::{Config, ConfigError};
@@ -91,19 +92,39 @@ fn main() {
     // 处理清理缓存命令
     if args.clean {
         println!("正在清理过期缓存...");
+
+        // 清理文件缓存
         match cache::CacheManager::new(&config.cache.storage_path, config.cache.default_ttl) {
             Ok(cache_manager) => {
                 if let Err(e) = cache_manager.clear_expired_cache() {
-                    eprintln!("清理缓存失败: {}", e);
+                    eprintln!("清理文件缓存失败: {}", e);
                     process::exit(1);
                 }
-                println!("缓存清理完成");
+                println!("文件缓存清理完成");
             }
             Err(e) => {
                 eprintln!("创建缓存管理器失败: {}", e);
                 process::exit(1);
             }
         }
+
+        // 清理版本管理器数据
+        match version_manager::VersionManager::new(&config) {
+            Ok(version_manager) => {
+                match version_manager.cleanup_expired_data() {
+                    Ok(count) => println!("版本管理器清理完成，清理了 {} 个过期数据", count),
+                    Err(e) => {
+                        eprintln!("清理版本管理器数据失败: {}", e);
+                        process::exit(1);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("创建版本管理器失败: {}", e);
+                process::exit(1);
+            }
+        }
+
         return;
     }
 

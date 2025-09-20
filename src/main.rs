@@ -8,7 +8,7 @@ mod version_manager;
 use clap::Parser;
 use config::{Config, ConfigError};
 use proxy::run_server;
-use rat_logger::{self, LevelFilter, FileConfig};
+use rat_logger::{self, LevelFilter, FileConfig, FormatConfig};
 use std::process;
 use std::path::PathBuf;
 
@@ -38,7 +38,22 @@ fn setup_logging(level: &str) {
         _ => LevelFilter::Info,
     };
 
-    // 初始化rat_logger，添加终端和文件输出
+    // 根据日志级别决定是否启用开发模式
+    let dev_mode = matches!(log_level, LevelFilter::Debug | LevelFilter::Trace);
+
+    // 配置文件输出（始终使用简洁格式）
+    let file_format = FormatConfig {
+        timestamp_format: "%Y-%m-%d %H:%M:%S%.3f".to_string(),
+        level_style: rat_logger::LevelStyle {
+            error: "ERROR".to_string(),
+            warn: "WARN ".to_string(),
+            info: "INFO ".to_string(),
+            debug: "DEBUG".to_string(),
+            trace: "TRACE".to_string(),
+        },
+        format_template: "{timestamp} [{level}] {message}".to_string(),
+    };
+
     let file_config = FileConfig {
         log_dir: PathBuf::from("./logs"),
         max_file_size: 10 * 1024 * 1024, // 10MB
@@ -48,20 +63,61 @@ fn setup_logging(level: &str) {
         skip_server_logs: false,
         is_raw: false,
         compress_on_drop: true,
-        format: None,
+        format: Some(file_format),
     };
 
-    // 根据日志级别决定是否启用开发模式
-    let dev_mode = matches!(log_level, LevelFilter::Debug | LevelFilter::Trace);
-
     let mut builder = rat_logger::LoggerBuilder::new()
-        .add_terminal()
         .add_file(file_config)
         .with_level(log_level);
 
-    // 在调试或跟踪级别启用开发模式，确保日志立即输出
+    // 根据是否为开发模式配置终端输出格式
     if dev_mode {
-        builder = builder.with_dev_mode(true);
+        // 开发模式：保留详细格式便于调试
+        let dev_format = FormatConfig {
+            timestamp_format: "%Y-%m-%d %H:%M:%S%.3f".to_string(),
+            level_style: rat_logger::LevelStyle {
+                error: "ERROR".to_string(),
+                warn: "WARN ".to_string(),
+                info: "INFO ".to_string(),
+                debug: "DEBUG".to_string(),
+                trace: "TRACE".to_string(),
+            },
+            format_template: "{timestamp} [{level}] {target}:{line} - {message}".to_string(),
+        };
+
+        builder = builder
+            .add_terminal_with_config(rat_logger::handler::term::TermConfig {
+                enable_color: true,
+                enable_async: false, // 开发模式禁用异步确保立即输出
+                batch_size: 1,
+                flush_interval_ms: 1,
+                format: Some(dev_format),
+                color: None, // 使用默认颜色
+            })
+            .with_dev_mode(true); // 确保日志立即输出
+    } else {
+        // 生产模式：简洁格式，只显示时间、级别和消息
+        let prod_format = FormatConfig {
+            timestamp_format: "%Y-%m-%d %H:%M:%S%.3f".to_string(),
+            level_style: rat_logger::LevelStyle {
+                error: "ERROR".to_string(),
+                warn: "WARN ".to_string(),
+                info: "INFO ".to_string(),
+                debug: "DEBUG".to_string(),
+                trace: "TRACE".to_string(),
+            },
+            format_template: "{timestamp} [{level}] {message}".to_string(),
+        };
+
+        builder = builder
+            .add_terminal_with_config(rat_logger::handler::term::TermConfig {
+                enable_color: true,
+                enable_async: true,
+                batch_size: 8192,
+                flush_interval_ms: 100,
+                format: Some(prod_format),
+                color: None, // 使用默认颜色
+            });
     }
 
     if let Err(e) = builder.init() {

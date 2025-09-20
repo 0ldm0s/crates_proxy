@@ -1346,9 +1346,7 @@ dependencies = [
 
 [[package]]
 name = "rat_logger"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9208fdf61d44a0f6611f45e78e41939b670ec5f35f1a5f5c2d5a65a5f4a02206"
+version = "0.2.4"
 dependencies = [
  "arc-swap",
  "async-trait",

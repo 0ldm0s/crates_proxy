@@ -48,14 +48,23 @@ fn setup_logging(level: &str) {
         skip_server_logs: false,
         is_raw: false,
         compress_on_drop: true,
+        format: None,
     };
 
-    if let Err(e) = rat_logger::LoggerBuilder::new()
+    // 根据日志级别决定是否启用开发模式
+    let dev_mode = matches!(log_level, LevelFilter::Debug | LevelFilter::Trace);
+
+    let mut builder = rat_logger::LoggerBuilder::new()
         .add_terminal()
         .add_file(file_config)
-        .with_level(log_level)
-        .init()
-    {
+        .with_level(log_level);
+
+    // 在调试或跟踪级别启用开发模式，确保日志立即输出
+    if dev_mode {
+        builder = builder.with_dev_mode(true);
+    }
+
+    if let Err(e) = builder.init() {
         eprintln!("日志初始化失败: {}", e);
         process::exit(1);
     }

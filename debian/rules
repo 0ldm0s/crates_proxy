@@ -1,0 +1,45 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE=1
+
+# 设置交叉编译
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+
+ifeq ($(DEB_BUILD_ARCH),$(DEB_HOST_ARCH))
+    # 本机构建
+    CARGO_TARGET = $(DEB_HOST_GNU_TYPE)
+else
+    # 交叉编译
+    CARGO_TARGET = $(DEB_HOST_GNU_TYPE)
+    CROSS_COMPILE = $(DEB_HOST_GNU_TYPE)-
+endif
+
+%:
+	dh $@ --buildsystem=cargo
+
+override_dh_auto_build:
+	# 如果是交叉编译，设置相应的环境变量
+	if [ "$(DEB_BUILD_ARCH)" != "$(DEB_HOST_ARCH)" ]; then \
+		export CARGO_TARGET_$(subst -,_,$(call toupper,$(DEB_HOST_GNU_TYPE)))_LINKER=$(CROSS_COMPILE)gcc; \
+		export CC_$(DEB_HOST_GNU_TYPE)=$(CROSS_COMPILE)gcc; \
+	fi
+	dh_auto_build
+
+override_dh_auto_install:
+	dh_auto_install
+	# 安装二进制文件
+	mkdir -p debian/crates-proxy/usr/bin
+	install -m 755 target/*/release/crates_proxy debian/crates-proxy/usr/bin/
+
+	# 创建配置文件目录
+	mkdir -p debian/crates-proxy/etc/crates_proxy
+	cp config.toml.example debian/crates-proxy/etc/crates_proxy/config.toml 2>/dev/null || true
+
+	# 创建systemd服务文件
+	mkdir -p debian/crates-proxy/lib/systemd/system
+	install -m 644 debian/crates-proxy.service debian/crates-proxy/lib/systemd/system/
+
+override_dh_clean:
+	dh_clean
+	rm -rf .cargo

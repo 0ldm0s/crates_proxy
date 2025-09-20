@@ -1,0 +1,16 @@
+[Unit]
+Description=Crates Proxy Server
+After=network.target
+
+[Service]
+Type=simple
+User=crates-proxy
+Group=crates-proxy
+ExecStart=/usr/bin/crates_proxy
+Restart=always
+RestartSec=10
+WorkingDirectory=/var/lib/crates_proxy
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

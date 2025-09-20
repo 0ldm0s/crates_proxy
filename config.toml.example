@@ -1,0 +1,16 @@
+[server]
+bind_addr = "0.0.0.0:8080"
+
+[cache]
+storage_path = "/var/lib/crates_proxy/cache"
+default_ttl = 3600
+
+[logging]
+level = "info"
+
+[user_agent]
+value = "Mozilla/5.0 ( compatible crates-proxy/0.1.0 )"
+
+# 可选：代理配置
+# [upstream]
+# proxy_url = "http://proxy.example.com:8080"

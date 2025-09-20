@@ -1,0 +1,23 @@
+Source: crates-proxy
+Section: utils
+Priority: optional
+Maintainer: 0ldm0s <oldmos@gmail.com>
+Build-Depends: debhelper (>= 13), dh-rust, cargo, rustc
+Standards-Version: 4.6.1
+Homepage: https://github.com/your-username/crates_proxy
+Rules-Requires-Root: no
+
+Package: crates-proxy
+Architecture: any
+Multi-Arch: allowed
+Depends: ${misc:Depends}, ${cargo:Depends}
+Description: 高性能的Rust crates.io缓存代理服务器
+ 一个高性能的Rust crates.io缓存代理服务器，专门设计用于加速cargo编译过程中的依赖包下载。
+ .
+ 特性:
+  * 智能缓存: 自动缓存所有版本的Rust包，支持复杂的依赖关系
+  * 高性能: 基于Hyper HTTP服务器和MelangeDB嵌入式数据库
+  * 版本管理: 完整的版本信息管理，支持TTL过期机制
+  * 代理支持: 支持HTTP/SOCKS5代理配置
+  * 统计监控: 提供详细的缓存统计和清理功能
+  * 生产就绪: 完善的错误处理和日志记录

@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "purge" ]; then
+    # 删除用户
+    if getent passwd crates-proxy >/dev/null; then
+        deluser --system crates-proxy
+    fi
+
+    # 删除缓存目录
+    rm -rf /var/lib/crates_proxy
+fi
+
+#DEBHELPER#
+
+exit 0

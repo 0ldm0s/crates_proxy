@@ -7,10 +7,6 @@ edition = "2024"
 name = "simple_curl_test"
 path = "examples/simple_curl_test.rs"
 
-[[example]]
-name = "trace_redirects"
-path = "examples/trace_redirects.rs"
-
 [dependencies]
 hyper = { version = "1.0", features = ["full"] }
 tokio = { version = "1.0", features = ["full"] }

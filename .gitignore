@@ -1,5 +1,11 @@
+# Rust编译输出
 /target
+/crates_proxy
+
+# Claude配置
 /.claude
+
+# 日志和缓存
 /logs
 /server.log
 /cache

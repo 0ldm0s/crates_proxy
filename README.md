@@ -40,6 +40,24 @@ cargo build --release
 cargo install crates_proxy
 ```
 
+### 使用安装脚本（推荐）
+
+编译完成后，可以使用提供的安装脚本自动部署到系统：
+
+```bash
+# 编译项目
+cargo build --release
+
+# 运行安装脚本（需要sudo权限）
+sudo ./install.sh
+```
+
+安装脚本会自动：
+- 创建 `/usr/local/crates_proxy` 目录
+- 复制可执行文件和配置文件
+- 创建专用的系统用户
+- 设置systemd服务并自动启动
+
 ## ⚙️ 配置
 
 服务器使用 `config.toml` 文件进行配置。首次运行时会自动创建默认配置文件：
@@ -81,6 +99,30 @@ cargo run -- -f /path/to/config.toml
 
 ```bash
 nohup cargo run > server.log 2>&1 &
+```
+
+### 系统服务管理
+
+如果使用安装脚本安装，可以使用systemd管理服务：
+
+```bash
+# 启动服务
+sudo systemctl start crates_proxy
+
+# 停止服务
+sudo systemctl stop crates_proxy
+
+# 重启服务
+sudo systemctl restart crates_proxy
+
+# 查看服务状态
+sudo systemctl status crates_proxy
+
+# 查看日志
+sudo journalctl -u crates_proxy -f
+
+# 开机自启
+sudo systemctl enable crates_proxy
 ```
 
 ## 📖 使用方法

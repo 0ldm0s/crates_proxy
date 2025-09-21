@@ -9,6 +9,7 @@ use clap::Parser;
 use config::{Config, ConfigError};
 use proxy::run_server;
 use rat_logger::{self, LevelFilter, FileConfig, FormatConfig};
+use rat_logger::producer_consumer::BatchConfig;
 use std::process;
 use std::path::PathBuf;
 
@@ -66,8 +67,14 @@ fn setup_logging(level: &str) {
         format: Some(file_format),
     };
 
+    // 小负载服务器的文件日志配置：在性能和可靠性之间取得平衡
     let mut builder = rat_logger::LoggerBuilder::new()
         .add_file(file_config)
+        .with_batch_config(BatchConfig {
+            batch_size: 512,        // 512字节批量大小，适中的批量处理
+            batch_interval_ms: 10,  // 10ms刷新间隔，确保及时写入
+            buffer_size: 1024,      // 1KB缓冲区，足够的缓冲空间
+        })
         .with_level(log_level);
 
     // 根据是否为开发模式配置终端输出格式
@@ -112,9 +119,9 @@ fn setup_logging(level: &str) {
         builder = builder
             .add_terminal_with_config(rat_logger::handler::term::TermConfig {
                 enable_color: true,
-                enable_async: true, // 异步模式使用更保守的配置确保可靠输出
-                batch_size: 2048, // 2KB批量大小
-                flush_interval_ms: 25, // 25ms刷新间隔
+                enable_async: false, // 改为同步输出确保日志立即显示
+                batch_size: 1,
+                flush_interval_ms: 1,
                 format: Some(prod_format),
                 color: None, // 使用默认颜色
             });

@@ -17,6 +17,9 @@
 *.tmp
 *.temp
 
+# 备份文件
+*.bak
+
 # IDE文件
 .vscode/
 .idea/

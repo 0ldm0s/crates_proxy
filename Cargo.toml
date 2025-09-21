@@ -3,9 +3,9 @@ name = "crates_proxy"
 version = "0.1.0"
 edition = "2024"
 
-[[example]]
-name = "simple_curl_test"
-path = "examples/simple_curl_test.rs"
+[[bin]]
+name = "crates_proxy"
+path = "src/main.rs"
 
 [dependencies]
 hyper = { version = "1.0", features = ["full"] }
@@ -18,8 +18,8 @@ thiserror = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8"
-rat_logger = { path = "/Users/0ldm0s/workspaces/rust/logger/rat_logger" }
-melange_db = { path = "/Users/0ldm0s/workspaces/rust/melange_db", features = ["compression-lz4"] }
+rat_logger = "0.2.7"
+melange_db = { version = "0.1.4", features = ["compression-lz4"] }
 url = "2.4"
 http-body-util = "0.1"
 hyper-util = { version = "0.1", features = ["full"] }

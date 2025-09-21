@@ -112,9 +112,9 @@ fn setup_logging(level: &str) {
         builder = builder
             .add_terminal_with_config(rat_logger::handler::term::TermConfig {
                 enable_color: true,
-                enable_async: true,
-                batch_size: 8192,
-                flush_interval_ms: 100,
+                enable_async: true, // 异步模式使用更保守的配置确保可靠输出
+                batch_size: 2048, // 2KB批量大小
+                flush_interval_ms: 25, // 25ms刷新间隔
                 format: Some(prod_format),
                 color: None, // 使用默认颜色
             });
@@ -131,6 +131,24 @@ fn load_config(config_path: Option<String>) -> Result<Config, ConfigError> {
         Some(path) => Config::from_file(path),
         None => Ok(Config::default()),
     }
+}
+
+/// 清理melange_db锁文件
+fn cleanup_melange_db_locks(config: &Config) {
+    use std::path::Path;
+
+    // 版本管理器数据库路径
+    let versions_db_path = Path::new(&config.cache.storage_path).join("versions_db");
+
+    // 清理版本管理器数据库锁文件
+    if let Err(e) = melange_db::cleanup_lock_files(&versions_db_path) {
+        rat_logger::warn!("清理版本管理器锁文件失败: {}", e);
+    } else {
+        rat_logger::info!("已检查版本管理器锁文件");
+    }
+
+    // 检查是否还有其他可能的melange_db实例
+    // 这里可以添加更多数据库路径的检查
 }
 
 fn main() {
@@ -153,6 +171,9 @@ fn main() {
 
     // 设置日志
     setup_logging(&config.logging.level);
+
+    // 清理melange_db锁文件
+    cleanup_melange_db_locks(&config);
 
     // 处理清理缓存命令
     if args.clean {
